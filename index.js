@@ -21,7 +21,7 @@ const AuthorSchema = new mongoose.Schema({
 const BookSchema = new mongoose.Schema({
   title: { type: String, required: true },
   authorId: { type: mongoose.Schema.Types.ObjectId, ref: 'Author' },
-  year: Number
+  genre: String
 });
 
 const Author = mongoose.model('Author', AuthorSchema);
@@ -29,36 +29,107 @@ const Book = mongoose.model('Book', BookSchema);
 
 // --- ROTAS DE AUTORES ---
 app.get('/api/authors', async (req, res) => {
-  const authors = await Author.find();
-  res.json(authors);
+  try {
+    const authors = await Author.find();
+    res.json(authors);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erro ao buscar autores' });
+  }
 });
 
 app.post('/api/authors', async (req, res) => {
-  const newAuthor = new Author(req.body);
-  await newAuthor.save();
-  res.status(201).json(newAuthor);
+  try {
+    const newAuthor = new Author(req.body);
+    await newAuthor.save();
+    res.status(201).json(newAuthor);
+  } catch (err) {
+    console.error(err);
+    res.status(400).json({ error: err.message || 'Erro ao criar autor' });
+  }
 });
 
 app.put('/api/authors/:id', async (req, res) => {
-  const updated = await Author.findByIdAndUpdate(req.params.id, req.body, { new: true });
-  res.json(updated);
+  try {
+    const updated = await Author.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    if (!updated) {
+      return res.status(404).json({ error: 'Autor não encontrado' });
+    }
+    res.json(updated);
+  } catch (err) {
+    console.error(err);
+    res.status(400).json({ error: err.message || 'Erro ao atualizar autor' });
+  }
 });
 
 app.delete('/api/authors/:id', async (req, res) => {
-  await Author.findByIdAndDelete(req.params.id);
-  res.status(204).send();
+  try {
+    const deleted = await Author.findByIdAndDelete(req.params.id);
+    if (!deleted) {
+      return res.status(404).json({ error: 'Autor não encontrado' });
+    }
+    // Deleta os livros associados a esse autor em cascata
+    await Book.deleteMany({ authorId: req.params.id });
+    res.status(204).send();
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erro ao deletar autor' });
+  }
 });
 
 // --- ROTAS DE LIVROS ---
 app.get('/api/books', async (req, res) => {
-  const books = await Book.find().populate('authorId');
-  res.json(books);
+  try {
+    const books = await Book.find().populate('authorId');
+    const formattedBooks = books.map(book => ({
+      _id: book._id,
+      title: book.title,
+      genre: book.genre,
+      authorId: book.authorId ? book.authorId._id : null,
+      authorName: book.authorId ? book.authorId.name : null
+    }));
+    res.json(formattedBooks);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erro ao buscar livros' });
+  }
 });
 
 app.post('/api/books', async (req, res) => {
-  const newBook = new Book(req.body);
-  await newBook.save();
-  res.status(201).json(newBook);
+  try {
+    const newBook = new Book(req.body);
+    await newBook.save();
+    res.status(201).json(newBook);
+  } catch (err) {
+    console.error(err);
+    res.status(400).json({ error: err.message || 'Erro ao criar livro' });
+  }
+});
+
+app.put('/api/books/:id', async (req, res) => {
+  try {
+    const updated = await Book.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    if (!updated) {
+      return res.status(404).json({ error: 'Livro não encontrado' });
+    }
+    res.json(updated);
+  } catch (err) {
+    console.error(err);
+    res.status(400).json({ error: err.message || 'Erro ao atualizar livro' });
+  }
+});
+
+app.delete('/api/books/:id', async (req, res) => {
+  try {
+    const deleted = await Book.findByIdAndDelete(req.params.id);
+    if (!deleted) {
+      return res.status(404).json({ error: 'Livro não encontrado' });
+    }
+    res.status(204).send();
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erro ao deletar livro' });
+  }
 });
 
 // Iniciar servidor
